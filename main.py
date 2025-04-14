@@ -1,61 +1,117 @@
 import yaml
 import requests
 import time
+import json
+import sys
 from collections import defaultdict
 
-# Function to load configuration from the YAML file
+
 def load_config(file_path):
+    """Load the YAML config file"""
     with open(file_path, 'r') as file:
         return yaml.safe_load(file)
 
-# Function to perform health checks
-def check_health(endpoint):
-    url = endpoint['url']
-    method = endpoint.get('method')
-    headers = endpoint.get('headers')
-    body = endpoint.get('body')
 
+def check_health(endpoint):
+    """
+    Check if an endpoint is healthy (UP) or not (DOWN).
+    An endpoint is UP if it returns a 2xx status and responds within 500ms.
+    """
+    url = endpoint['url']
+    # Default to GET
+    method = endpoint.get('method', 'GET')
+    headers = endpoint.get('headers', {})
+    
+    # Handle the body
+    body = None
+    if 'body' in endpoint:
+        if isinstance(endpoint['body'], str):
+            # Try to parse JSON
+            try:
+                body = json.loads(endpoint['body'])
+            except:
+                # Just use the string as-is
+                body = endpoint['body']
+        else:
+            body = endpoint['body']
+    
     try:
-        response = requests.request(method, url, headers=headers, json=body)
-        if 200 <= response.status_code < 300:
+        # Make the request with a 500ms timeout
+        start = time.time()
+        
+        # Handle content-type edge case
+        if headers.get('content-type') == 'application/json' and isinstance(body, str):
+            response = requests.request(
+                method, url, headers=headers, data=body, timeout=0.5
+            )
+        else:
+            response = requests.request(
+                method, url, headers=headers, json=body, timeout=0.5
+            )
+            
+        duration = time.time() - start
+        
+        # Consider it UP only if status code is 2xx and response time is <= 500ms
+        if 200 <= response.status_code < 300 and duration <= 0.5:
             return "UP"
         else:
             return "DOWN"
-    except requests.RequestException:
+    except:
+        # Any errors (timeout, connection issues, etc.) count as DOWN
         return "DOWN"
 
-# Main function to monitor endpoints
-def monitor_endpoints(file_path):
-    config = load_config(file_path)
-    domain_stats = defaultdict(lambda: {"up": 0, "total": 0})
 
+def monitor_endpoints(config_path):
+    """Main monitoring function that runs in a loop"""
+    # Load the endpoints from YAML
+    endpoints = load_config(config_path)
+    
+    stats = defaultdict(lambda: {"up": 0, "total": 0})
+    
+    print(f"Starting to monitor {len(endpoints)} endpoints...")
+    
+    # Main monitoring loop
     while True:
-        for endpoint in config:
-            domain = endpoint["url"].split("//")[-1].split("/")[0]
+        cycle_start = time.time()
+        
+        # Check each endpoint
+        for endpoint in endpoints:
+            # Extract domain name (ignore port if present)
+            domain = endpoint["url"].split("//")[-1].split("/")[0].split(":")[0]
+            
+            # Check if endpoint is up or down
             result = check_health(endpoint)
-
-            domain_stats[domain]["total"] += 1
+            
+            # Update stats
+            stats[domain]["total"] += 1
             if result == "UP":
-                domain_stats[domain]["up"] += 1
-
-        # Log cumulative availability percentages
-        for domain, stats in domain_stats.items():
-            availability = round(100 * stats["up"] / stats["total"])
+                stats[domain]["up"] += 1
+        
+        # Print current availability for each domain
+        for domain, domain_stats in stats.items():
+            availability = round(100 * domain_stats["up"] / domain_stats["total"])
             print(f"{domain} has {availability}% availability percentage")
-
+        
         print("---")
-        time.sleep(15)
+        
+        # Sleep to make the cycle take exactly 15 seconds
+        elapsed = time.time() - cycle_start
+        time.sleep(max(0, 15 - elapsed))
 
-# Entry point of the program
+
 if __name__ == "__main__":
-    import sys
-
+    # check for config file
     if len(sys.argv) != 2:
-        print("Usage: python monitor.py <config_file_path>")
+        print("Usage: python monitor.py <config_file>")
         sys.exit(1)
-
+    
     config_file = sys.argv[1]
+    
     try:
         monitor_endpoints(config_file)
     except KeyboardInterrupt:
         print("\nMonitoring stopped by user.")
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)

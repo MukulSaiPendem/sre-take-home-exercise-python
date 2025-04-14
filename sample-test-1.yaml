@@ -1,0 +1,46 @@
+# Public APIs with various configurations
+- name: GitHub API Status
+  url: https://www.githubstatus.com/api/v2/status.json
+  method: GET
+  
+- name: JSONPlaceholder Posts
+  url: https://jsonplaceholder.typicode.com/posts/1
+  method: GET
+  headers:
+    Accept: application/json
+    
+- name: Postman Echo GET Test
+  url: https://postman-echo.com/get?foo1=bar1&foo2=bar2
+  method: GET
+  
+- name: Postman Echo POST with JSON
+  url: https://postman-echo.com/post
+  method: POST
+  headers:
+    content-type: application/json
+  body: '{"test":"value"}'
+  
+- name: Postman Echo PUT Test
+  url: https://postman-echo.com/put
+  method: PUT
+  headers:
+    content-type: application/json
+  body: '{"updated":"content"}'
+  
+- name: Delayed Response Test
+  url: https://httpbin.org/delay/1
+  method: GET
+  
+- name: Random 404 Error
+  url: https://httpbin.org/status/404
+  method: GET
+  
+- name: Weather API
+  url: https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&current_weather=true
+  method: GET
+  
+- name: Chuck Norris Joke API
+  url: https://api.chucknorris.io/jokes/random
+  method: GET
+  headers:
+    Accept: application/json
